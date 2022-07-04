@@ -656,6 +656,7 @@ let proj_matrix = mat4_make_perspective( fov, aspect, znear, zfar );
 
 const CULL_NONE = 0, CULL_BACKFACE = 1;
 let cull_method = CULL_BACKFACE;
+let WireFrame = false; // 是否需要线框展示
 
 // 要执行渲染的三角形数组
 let triangles_to_render = [];
@@ -691,7 +692,6 @@ const update = ()=>{
   let rotation_matrix_x = mat4_make_rotation_x( mesh.rotation.x );
   let rotation_matrix_y = mat4_make_rotation_y( mesh.rotation.y );
   let rotation_matrix_z = mat4_make_rotation_z( mesh.rotation.z );
-
 
   //
   // camera.position.x = 0;
@@ -849,13 +849,15 @@ const draw = ()=>{
       mesh_texture
     );
 
-    // draw_triangle(
-    //   gd,
-    //   triangle.points[0].x, triangle.points[0].y, // A
-    //   triangle.points[1].x, triangle.points[1].y, // B
-    //   triangle.points[2].x, triangle.points[2].y, // C
-    //   "#FFFFFF"
-    // );
+    if( WireFrame ){
+      draw_triangle(
+        gd,
+        triangle.points[0].x, triangle.points[0].y, // A
+        triangle.points[1].x, triangle.points[1].y, // B
+        triangle.points[2].x, triangle.points[2].y, // C
+        "#FFFFFF"
+      );
+    }
 
   } // for i mesh_face
 
@@ -866,12 +868,25 @@ const draw = ()=>{
 // 程序入口
 (async()=>{
 
-  let {width, height, data} = await load_png_texture_data('crab.png');
+  let {width, height, data} = await load_png_texture_data('drone.png');
   texture_width = width;
   texture_height = height;
   mesh_texture = data;
 
-  await load_obj_file_data('crab.obj', mesh);
+  await load_obj_file_data('drone.obj', mesh);
+
+  // 键盘事件
+  document.onkeydown = ev=>{
+    // WireFrame
+    // 87 w 83 s
+    if( ev.keyCode == 87 ){
+      WireFrame = true;
+    }
+
+    if( ev.keyCode == 83 ){
+      WireFrame = false;
+    }
+  };
 
   // return;
   draw();
