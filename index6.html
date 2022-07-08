@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title></title>
+<style>
+body{background: gray;}
+#c1{display:block;margin:auto;border: 1px solid black;}
+</style>
+<script src="redtexture.js" charset="utf-8"></script>
+<script src="load_obj.js" charset="utf-8"></script>
+<script>
+
+// 二维向量方法
+function vec2_length(v){
+  return (v.x ** 2 + v.y ** 2) ** 0.5;
+}
+
+function vec2_add(a, b){
+  return {
+    x: a.x + b.x,
+    y: a.y + b.y,
+  };
+}
+
+function vec2_sub(a, b){
+  return {
+    x: a.x - b.x,
+    y: a.y - b.y,
+  };
+}
+
+function vec2_mul(v, factor){
+  return {
+    x: v.x * factor,
+    y: v.y * factor,
+  };
+}
+
+function vec2_div(v, factor){
+  return {
+    x: v.x / factor,
+    y: v.y / factor,
+  };
+}
+
+function vec2_dot(a, b){
+  return a.x * b.x + a.y * b.y;
+}
+
+function vec2_normalize(v){
+  let length = Math.sqrt( v.x ** 2 + v.y ** 2 );
+  v.x /= length
+  v.y /= length
+}
+
+// 三维向量方法
+function vec3_length(v){
+  return ( v.x ** 2 + v.y ** 2 + v.z ** 2 ) ** 0.5;
+}
+
+function vec3_add(a, b){
+  return {
+    x: a.x + b.x,
+    y: a.y + b.y,
+    z: a.z + b.z,
+  };
+}
+
+function vec3_sub(a, b){
+  return {
+    x: a.x - b.x,
+    y: a.y - b.y,
+    z: a.z - b.z,
+  };
+}
+
+function vec3_mul(v, factor) {
+  return {
+    x: v.x * factor,
+    y: v.y * factor,
+    z: v.z * factor,
+  };
+}
+
+function vec3_div(v, factor){
+  return {
+    x: v.x / factor,
+    y: v.y / factor,
+    z: v.z / factor,
+  };
+}
+
+function vec3_cross( a, b ){
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
+}
+
+function vec3_dot(a, b){
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function vec3_normalize(v){
+  let length = Math.sqrt( v.x ** 2 + v.y ** 2 + v.z ** 2 );
+  v.x /= length
+  v.y /= length
+  v.z /= length
+}
+
+function vec3_rotate_x(v, angle){
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return {
+    x: v.x,
+    y: v.y * cos - v.z * sin,
+    z: v.y * sin + v.z * cos,
+  };
+}
+
+function vec3_rotate_y(v, angle){
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return {
+    x: v.x * cos + v.z * sin,
+    y: v.y,
+    z: -v.x * sin + v.z * cos,
+  };
+}
+
+function vec3_rotate_z(v, angle){
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return {
+    x: v.x * cos - v.y * sin,
+    y: v.x * sin + v.y * cos,
+    z: v.z,
+  };
+}
+
+function vec4_from_vec3( v3 ){
+  return {
+    x: v3.x, y: v3.y, z: v3.z, w: 1.0,
+  };
+}
+
+function vec3_from_vec4( v4 ){
+  return {
+    x: v4.x, y: v4.y, z: v4.z,
+  };
+}
+
+function vec2_from_vec4( v4 ){
+  return {
+    x: v4.x, y: v4.y,
+  };
+}
+
+// 矩阵相关运算
+function mat4_identity(){
+  return [
+      [ 1, 0, 0, 0 ],
+      [ 0, 1, 0, 0 ],
+      [ 0, 0, 1, 0 ],
+      [ 0, 0, 0, 1 ]
+  ];
+}
+
+function mat4_make_scale(sx, sy, sz){
+  let m = mat4_identity();
+  m[0][0] = sx;
+  m[1][1] = sy;
+  m[2][2] = sz;
+  return m;
+}
+
+function mat4_make_translation( tx, ty, tz ){
+    let m = mat4_identity();
+    m[0][3] = tx;
+    m[1][3] = ty;
+    m[2][3] = tz;
+    return m;
+}
+
+// 透视投影矩阵
+function mat4_make_perspective( fov, aspect, znear, zfar ){
+  let m = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0]
+  ];
+
+  const tan = Math.tan( fov / 2 );
+  m[0][0] = aspect * ( 1 / tan );
+  m[1][1] = 1 / tan;
+  m[2][2] = zfar / (zfar - znear);
+  m[2][3] = -zfar * znear / ( zfar - znear );
+  m[3][2] = 1.0;
+  return m;
+}
+
+// 透视矩阵乘以 4维列向量
+function mat4_mul_vec4_project( mat_proj, v ){
+  let res = mat4_mul_vec4( mat_proj, v );
+
+  if( res.w != 0 ){
+    res.x /= res.w;
+    res.y /= res.w;
+    res.z /= res.w;
+  }
+  return res;
+}
+
+// 相机矩阵
+function mat4_look_at(eye, target, up){
+  let z = vec3_sub(target, eye);
+  vec3_normalize(z);
+  let x = vec3_cross(up, z);
+  vec3_normalize(x);
+  let y = vec3_cross(z, x);
+
+  return [
+    [ x.x, x.y, x.z, -vec3_dot(x, eye)],
+    [ y.x, y.y, y.z, -vec3_dot(y, eye)],
+    [ z.x, z.y, z.z, -vec3_dot(z, eye)],
+    [ 0,   0,   0,   1 ],
+  ];
+}
+
+// 绕 X 转动
+function mat4_make_rotation_x(angle){
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  let m = mat4_identity();
+
+  m[1][1] = cos;
+  m[1][2] = -sin;
+  m[2][1] = sin;
+  m[2][2] = cos;
+  return m;
+}
+
+// 绕 Y 转动
+function mat4_make_rotation_y(angle) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  let m = mat4_identity();
+
+  m[0][0] = cos;
+  m[0][2] = sin;
+  m[2][0] = -sin;
+  m[2][2] = cos;
+  return m;
+}
+
+// 绕 Z 转动
+function mat4_make_rotation_z( angle ){
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  let m = mat4_identity();
+
+  m[0][0] = cos;
+  m[0][1] = -sin;
+  m[1][0] = sin;
+  m[1][1] = cos;
+  return m;
+}
+
+function mat4_mul_vec4( m, v ){
+  let res = {x: 0, y: 0, z: 0, w: 1};
+
+  res.x = m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z + m[0][3] * v.w;
+  res.y = m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z + m[1][3] * v.w;
+  res.z = m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z + m[2][3] * v.w;
+  res.w = m[3][0] * v.x + m[3][1] * v.y + m[3][2] * v.z + m[3][3] * v.w;
+
+  return res;
+}
+
+function mat4_mul_mat4( a, b ){
+
+  let res = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0]
+  ];
+
+  for( let i = 0; i < 4; i ++ ){
+    for( let j = 0; j < 4; j ++ ){
+      res[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j] + a[i][3] * b[3][j];
+    }
+  }
+  return res;
+}
+
+// 画点
+function draw_pixel(gd, x, y, color){
+  gd.fillStyle = color;
+  gd.fillRect( x, y, 1, 1 );
+}
+
+// 画直线
+function draw_line( gd, x0, y0, x1, y1, color ){
+  let dx = x1 - x0;
+  let dy = y1 - y0;
+  let max_side_length = Math.abs(dx) > Math.abs(dy) ? Math.abs(dx) : Math.abs(dy);
+
+  let x_inc = dx / max_side_length;
+  let y_inc = dy / max_side_length;
+
+  let current_x = x0, current_y = y0;
+
+  for( let i = 0; i <= max_side_length; i ++ ){
+      draw_pixel( gd, Math.round(current_x), Math.round(current_y), color );
+      current_x += x_inc
+      current_y += y_inc
+  } // for i
+}
+
+// 画矩形
+function draw_rect(gd, x, y, width, height, color){
+  for( let i = 0; i < width; i ++ ){
+    for( let j = 0; j < height; j ++ ){
+      let current_x = x + i, current_y = y + j;
+      draw_pixel( gd, current_x, current_y, color );
+    }
+  } // for i
+}
+
+
+// 三角形渲染方法
+function draw_filled_triangle( gd, x0, y0, x1, y1, x2, y2, color ){
+  // 对y分量进行排序, 使 y0 < y1 < y2
+  if( y0 > y1 ){
+    let tmpY = y0
+    y0 = y1
+    y1 = tmpY
+
+    let tmpX = x0
+    x0 = x1
+    x1 = tmpX
+  }
+
+  if( y1 > y2 ){
+    let tmpY = y1
+    y1 = y2
+    y2 = tmpY
+
+    let tmpX = x1
+    x1 = x2
+    x2 = tmpX
+  }
+
+  if( y0 > y1 ){
+    let tmpY = y0
+    y0 = y1
+    y1 = tmpY
+
+    let tmpX = x0
+    x0 = x1
+    x1 = tmpX
+  }
+
+  if( y1 == y2 ){
+    fill_flat_bottom_triangle( gd, x0, y0, x1, y1, x2, y2, color )
+  }else if( y1 == y0 ){
+    fill_flat_top_triangle( gd, x0, y0, x1, y1, x2, y2, color )
+  }else{
+    let My = y1;
+    let Mx = (((x2 - x0) * (y1 - y0)) / (y2 - y0)) + x0;
+
+    fill_flat_bottom_triangle( gd, x0, y0, x1, y1, Mx, My, color )
+    fill_flat_top_triangle( gd, x1, y1, Mx, My, x2, y2, color )
+  }
+}
+
+// 上三角
+function fill_flat_bottom_triangle( gd, x0, y0, x1, y1, x2, y2, color ){
+  let inv_slope_1 = (x1- x0) / (y1 - y0),
+      inv_slope_2 = (x2 - x0) / (y2 - y0);
+
+  let x_start = x0, x_end = x0;
+  // scan Line by Line
+  for( let y = y0; y <= y2; y ++ ){
+    draw_line( gd, x_start, y, x_end, y, color );
+    x_start += inv_slope_1
+    x_end += inv_slope_2
+  } // for y
+}
+
+// 下三角
+function fill_flat_top_triangle( gd, x0, y0, x1, y1, x2, y2, color ){
+  let inv_slope_1 = (x2-x0) / (y2 - y0);
+  let inv_slope_2 = (x2-x1) / (y2 - y1);
+
+  let x_start = x2, x_end = x2;
+  // scan Line by Line
+  for( let y = y2; y >= y0; y -- ){
+    draw_line( gd, x_start, y, x_end, y, color );
+    x_start -= inv_slope_1
+    x_end -= inv_slope_2
+  } // for y
+
+}
+
+function draw_triangle( gd, x0, y0, x1, y1, x2, y2, color ){
+    draw_line(gd, x0, y0, x1, y1, color);
+    draw_line(gd, x1, y1, x2, y2, color);
+    draw_line(gd, x2, y2, x0, y0, color);
+}
+
+// 画带材质的三角形
+function draw_textured_triangle(
+    gd,
+    x0, y0, z0, w0, u0, v0,
+    x1, y1, z1, w1, u1, v1,
+    x2, y2, z2, w2, u2, v2,
+    texture
+){
+  // y0 < y1 < y2
+  if( y0 > y1 ){
+    let tmpY = y0
+    y0 = y1
+    y1 = tmpY
+    let tmpX = x0
+    x0 = x1
+    x1 = tmpX
+    let tmpZ = z0;
+    z0 = z1;
+    z1 = tmpZ;
+    let tmpW = w0;
+    w0 = w1;
+    w1 = tmpW;
+    let tmpU = u0
+    u0 = u1
+    u1 = tmpU
+    let tmpV = v0
+    v0 = v1
+    v1 = tmpV
+  }
+
+  if( y1 > y2 ){
+    let tmpY = y1
+    y1 = y2
+    y2 = tmpY
+    let tmpX = x1
+    x1 = x2
+    x2 = tmpX
+    let tmpZ = z1;
+    z1 = z2;
+    z2 = tmpZ;
+    let tmpW = w1;
+    w1 = w2;
+    w2 = tmpW;
+    let tmpU = u1
+    u1 = u2
+    u2 = tmpU
+    let tmpV = v1
+    v1 = v2
+    v2 = tmpV
+  }
+
+  if( y0 > y1 ){
+    let tmpY = y0
+    y0 = y1
+    y1 = tmpY
+    let tmpX = x0
+    x0 = x1
+    x1 = tmpX
+    let tmpZ = z0;
+    z0 = z1;
+    z1 = tmpZ;
+    let tmpW = w0;
+    w0 = w1;
+    w1 = tmpW;
+    let tmpU = u0
+    u0 = u1
+    u1 = tmpU
+    let tmpV = v0
+    v0 = v1
+    v1 = tmpV
+  }
+
+  v0 = 1.0 - v0
+  v1 = 1.0 - v1
+  v2 = 1.0 - v2
+
+  // 当排序好后，创建点对象 和 材质
+  let point_a = {x: x0, y: y0, z: z0, w: w0}
+  let point_b = {x: x1, y: y1, z: z1, w: w1}
+  let point_c = {x: x2, y: y2, z: z2, w: w2}
+  let a_uv={u: u0, v: v0};
+  let b_uv={u: u1, v: v1};
+  let c_uv={u: u2, v: v2};
+
+  // flat-bottom
+  let inv_slope_1 = 0, inv_slope_2 = 0;
+  if( y1 - y0 != 0 ) inv_slope_1 = (x1 - x0) / Math.abs(y1 - y0);
+  if( y2 - y0 != 0 ) inv_slope_2 = (x2 - x0) / Math.abs(y2 - y0);
+
+  if( y1 - y0 != 0 ){
+    for( let y = y0; y <= y1; y ++ ){
+      let x_start = x1 + (y - y1) * inv_slope_1;
+      let x_end = x0 + (y - y0) * inv_slope_2;
+
+      if( x_end < x_start ){
+        let tmp = x_end;
+        x_end = x_start;
+        x_start = tmp;
+      }
+
+      for( let x = Math.round(x_start); x <= Math.round(x_end); x ++ ){
+        // draw texel
+        // draw_texel( gd,x, y, texture, point_a, point_b, point_c, u0, v0, u1, v1, u2, v2 );
+        draw_triangle_texel( gd, x, y, texture, point_a, point_b, point_c, a_uv, b_uv, c_uv );
+      } // for x
+
+    } // for y
+  }
+
+  // flat-top
+  inv_slope_1 = 0
+  inv_slope_2 = 0
+
+  if(y2 - y1!= 0) inv_slope_1 = (x2-x1) / Math.abs(y2-y1);
+  if(y2 - y0!= 0) inv_slope_2 = (x2-x0) / Math.abs(y2-y0);
+
+  if( y2 - y1 != 0 ){
+    for( let y = y1; y <= y2; y ++ ){
+      let x_start = x1 + (y - y1) * inv_slope_1;
+      let x_end = x0 + (y - y0) * inv_slope_2;
+
+      if( x_end < x_start ){
+        let tmp = x_end;
+        x_end = x_start;
+        x_start = tmp;
+      }
+
+      for( let x = Math.round(x_start); x < Math.round(x_end); x ++ ){
+        // draw_texel( gd,x, y, texture, point_a, point_b, point_c, u0, v0, u1, v1, u2, v2 );
+        draw_triangle_texel( gd, x, y, texture, point_a, point_b, point_c, a_uv, b_uv, c_uv );
+      } // for x
+
+    } // for y
+  }
+
+}
+
+function draw_texel( gd,x, y, texture, point_a, point_b, point_c, u0, v0, u1, v1, u2, v2 ){
+  let point_p = {x, y};
+  let a = vec2_from_vec4(point_a);
+  let b = vec2_from_vec4(point_b);
+  let c = vec2_from_vec4(point_c);
+
+  let {alpha, beta, gamma} = barycentric_weights( point_a, point_b, point_c, point_p );
+
+  // 取 z 值
+  let interpolated_reciprocal_w = (1 / point_a.w) * alpha + (1 / point_b.w) * beta + (1 / point_c.w) * gamma;
+
+  let interpolated_u = (u0 / point_a.w) * alpha + (u1 / point_b.w) * beta + (u2 / point_c.w) * gamma;
+  let interpolated_v = (v0 / point_a.w) * alpha + (v1 / point_b.w) * beta + (v2 / point_c.w) * gamma;
+
+  interpolated_u /= interpolated_reciprocal_w
+  interpolated_v /= interpolated_reciprocal_w
+
+  let tex_x = Math.abs( interpolated_u * texture_width ) | 0;
+  let tex_y = Math.abs( interpolated_v * texture_height ) | 0;
+
+  let color = texture[ (texture_width * tex_y) + tex_x ]
+  draw_pixel( gd,x, y, color );
+}
+
+function draw_triangle_texel( gd, x, y, texture, point_a, point_b, point_c, a_uv, b_uv, c_uv ){
+  let p = {x, y};
+  let a = vec2_from_vec4(point_a);
+  let b = vec2_from_vec4(point_b);
+  let c = vec2_from_vec4(point_c);
+
+  let {alpha, beta, gamma} = barycentric_weights( a, b, c, p );
+  let interpolated_u = a_uv.u / point_a.w * alpha + b_uv.u / point_b.w * beta + c_uv.u / point_c.w * gamma;
+  let interpolated_v = a_uv.v / point_a.w * alpha + b_uv.v / point_b.w * beta + c_uv.v / point_c.w * gamma;
+  let interpolated_reciprocal_w = 1 / point_a.w * alpha + 1 / point_b.w * beta + 1 / point_c.w * gamma;
+
+  interpolated_u /= interpolated_reciprocal_w
+  interpolated_v /= interpolated_reciprocal_w
+
+  let tex_x = Math.abs(Math.floor(interpolated_u * texture_width)) % texture_width;
+  let tex_y = Math.abs(Math.floor(interpolated_v * texture_height)) % texture_height;
+
+  interpolated_reciprocal_w = 1.0 - interpolated_reciprocal_w;
+
+  if( interpolated_reciprocal_w < zbuffer[y * window_width + x] ){
+    draw_pixel( gd,x, y, texture[ tex_y * texture_width + tex_x ] );
+    zbuffer[y * window_width + x] = interpolated_reciprocal_w; // 更新zbuffer
+  }
+
+}
+
+function barycentric_weights( a, b, c, p ){
+  let ab = vec2_sub(b, a);
+  let bc = vec2_sub(c, b);
+  let ac = vec2_sub(c, a);
+  let ap = vec2_sub(p, a);
+  let bp = vec2_sub(p, b);
+
+  // 计算三角形的面积
+  let area_triangle_abc = ab.x * ac.y - ab.y * ac.x;
+  let alpha = (bc.x * bp.y - bp.x * bc.y) / area_triangle_abc;
+  let beta = (ap.x * ac.y - ac.x * ap.y) / area_triangle_abc;
+  let gamma = 1 - alpha - beta;
+
+  return {alpha, beta, gamma};
+}
+
+function light_apply_intensity( color, percent ){
+  if(percent < 0) percent = 0
+  if(percent > 1) percent = 1
+
+  let rr = (color & 0xFF0000) * percent,
+      gg = (color & 0x00FF00) * percent,
+      bb = (color & 0x0000FF) * percent;
+  let newColor = ( rr & 0xFF0000 ) | (gg & 0x00FF00) | (bb & 0x0000FF);
+  return newColor;
+}
+
+</script>
+</head>
+<body>
+<canvas id="c1" width="800" height="600"></canvas>
+<script>
+const c1 = document.getElementById('c1');
+const gd = c1.getContext('2d');
+
+const window_width = c1.width, window_height = c1.height;
+
+let mesh = {
+  vertices: [],
+  faces: [],
+  rotation:{x: 0, y: 0, z: 0},
+  scale:{x: 1.0, y: 1.0, z: 1.0},
+  translation:{x: 0, y: 0, z: 0},
+};
+
+// 全局变量初始化
+let camera_position = {x: 6, y: 0, z: 0};
+let camera = {
+  position:{x: 0, y: 0, z: 0},
+  direction:{x: 0, y: 0, z: 1},
+  forward_velocity: {x: 0, y: 0, z: 0},
+  yaw: 0,
+};
+
+let fov_factor = 640;
+
+let fov = Math.PI / 3;
+let aspect = c1.height / c1.width;
+let znear = 0.1;
+let zfar = 100.0;
+let proj_matrix = mat4_make_perspective( fov, aspect, znear, zfar );
+
+const CULL_NONE = 0, CULL_BACKFACE = 1;
+let cull_method = CULL_BACKFACE;
+let WireFrame = false; // 是否需要线框展示
+
+// 要执行渲染的三角形数组
+let triangles_to_render = [];
+
+// 深度缓冲区
+let zbuffer=Array(c1.width * c1.height).fill(1.0);
+
+// 清除深度缓冲区
+function clear_z_buffer(){
+  zbuffer = zbuffer.map(_=>1.0);
+}
+
+// 3D 投影成 2D 平面
+function project( point ){
+  return {
+    x: fov_factor * point.x / point.z,
+    y: fov_factor * point.y / point.z,
+  };
+}
+
+const update = ()=>{
+  triangles_to_render = [];
+
+  mesh.rotation.x += 0.000
+  mesh.rotation.y += .000
+  mesh.rotation.z += .000
+  mesh.translation.z = 5.0
+
+  let scale_matrix = mat4_make_scale( mesh.scale.x, mesh.scale.y, mesh.scale.z );
+  let translation_matrix = mat4_make_translation( mesh.translation.x, mesh.translation.y, mesh.translation.z );
+  let rotation_matrix_x = mat4_make_rotation_x( mesh.rotation.x );
+  let rotation_matrix_y = mat4_make_rotation_y( mesh.rotation.y );
+  let rotation_matrix_z = mat4_make_rotation_z( mesh.rotation.z );
+
+  //
+  // camera.position.x = 0;
+  // camera.position.y = 0;
+
+  let target = {x: 0, y: 0, z: 1};
+  let camera_yaw_rotation = mat4_make_rotation_y( camera.yaw );
+  camera.direction = vec3_from_vec4(mat4_mul_vec4(camera_yaw_rotation, vec4_from_vec3(target)));
+  target = vec3_add( camera.position, camera.direction );
+  let up_direction = { x: 0, y: 1, z: 0 };
+  let view_matrix = mat4_look_at( camera.position, target, up_direction );
+
+  let num_faces = mesh.faces.length;
+
+  // 遍历每一个三角面
+  for( let i = 0; i < num_faces; i ++ ){
+    let mesh_face = mesh.faces[i];
+    let face_vertices = [];
+
+    //
+    mesh_face.color = '#FFFFFF'
+
+    face_vertices[0] = mesh.vertices[mesh_face.a - 1];
+    face_vertices[1] = mesh.vertices[mesh_face.b - 1];
+    face_vertices[2] = mesh.vertices[mesh_face.c - 1];
+
+    let transformed_vertices = [];
+    for( let j = 0; j < 3; j ++ ){
+      let transformed_vertex = vec4_from_vec3( face_vertices[j] );
+      let world_matrix = mat4_identity();
+
+      // 对 转动, 缩放, 位移矩阵进行运算
+      world_matrix = mat4_mul_mat4(scale_matrix, world_matrix);
+      world_matrix = mat4_mul_mat4(rotation_matrix_z, world_matrix);
+      world_matrix = mat4_mul_mat4(rotation_matrix_y, world_matrix);
+      world_matrix = mat4_mul_mat4(rotation_matrix_x, world_matrix);
+      world_matrix = mat4_mul_mat4(translation_matrix, world_matrix);
+
+      transformed_vertex = mat4_mul_vec4( world_matrix, transformed_vertex );
+      transformed_vertex = mat4_mul_vec4( view_matrix, transformed_vertex );
+      transformed_vertices[j] = transformed_vertex;
+    } // for j
+
+    let vector_a = vec3_from_vec4(transformed_vertices[0]); /*   A   */
+    let vector_b = vec3_from_vec4(transformed_vertices[1]); /*  / \  */
+    let vector_c = vec3_from_vec4(transformed_vertices[2]); /* C---B */
+
+    let vector_ab = vec3_sub(vector_b, vector_a);
+    let vector_ac = vec3_sub(vector_c, vector_a);
+    vec3_normalize(vector_ab);
+    vec3_normalize(vector_ac);
+
+    let normal = vec3_cross( vector_ab, vector_ac );
+    vec3_normalize(normal);
+
+    let origin = {x: 0, y: 0, z: 0}; // 相机位置
+    // let camera_ray = vec3_sub( camera_position, vector_a );
+    let camera_ray = vec3_sub( origin, vector_a );
+    let dot_normal_camera = vec3_dot( normal, camera_ray );
+
+    // 如果是开启背面剔除
+    if( cull_method == CULL_BACKFACE ){
+      // 如果点积小于0, 说明此面不可见,在背面
+      if( dot_normal_camera < 0 ){
+        continue;
+      }
+    }
+
+    let projected_points = [];
+    for( let j = 0; j < 3; j ++ ){
+      // projected_points[j] = project( vec3_from_vec4( transformed_vertices[j] ) );
+      // 这里用透视投影矩阵来作投影运算
+      projected_points[j] = mat4_mul_vec4_project(proj_matrix, transformed_vertices[j] );
+
+      // 3D模型坐标Y是从下到上, 而屏幕坐标的Y是从上到下,所以要反转
+      projected_points[j].y *= -1;
+
+      // 缩放再平移
+      projected_points[j].x *= c1.width / 2
+      projected_points[j].y *= c1.height / 2
+
+      projected_points[j].x += c1.width / 2
+      projected_points[j].y += c1.height / 2
+
+      // *** 取整 ***
+      projected_points[j].x = projected_points[j].x | 0
+      projected_points[j].y = projected_points[j].y | 0
+    } // for j
+
+    // 面的深度
+    let avg_depth = (transformed_vertices[0].z + transformed_vertices[1].z+transformed_vertices[2].z) / 3.0;
+    // 光照强度
+    let light_intensity_factor = vec3_dot( normal, {x: 0, y: 0, z: -1} );
+    // 面的光照颜色
+    let triangle_color = light_apply_intensity(0xFFFFFF, light_intensity_factor);
+    // console.log('color=', triangle_color.toString(16));
+
+    let projected_triangle = {
+      points: [
+        { ...projected_points[0] },
+        { ...projected_points[1] },
+        { ...projected_points[2] },
+      ],
+      texcoords:[
+        {...mesh_face.a_uv},
+        {...mesh_face.b_uv},
+        {...mesh_face.c_uv}
+      ],
+      // color: mesh_face.color,
+      color: '#'+triangle_color.toString(16),
+      avg_depth,
+    };
+
+    triangles_to_render.push(projected_triangle)
+  } // for i mesh_face
+
+  // 绘画者算法, 对三角面按深度排序
+  let num_triangles = triangles_to_render.length;
+
+  for( let i = 0; i < num_triangles; i ++ ){
+    for( let j = i + 1; j < num_triangles; j ++ ){
+      if( triangles_to_render[i].avg_depth < triangles_to_render[j].avg_depth ){
+        let tmp = triangles_to_render[i]
+        triangles_to_render[i] = triangles_to_render[j]
+        triangles_to_render[j] = tmp
+      }
+    } // for j over
+  } // for i over
+
+};
+
+const draw = ()=>{
+  // 清空画布
+  gd.clearRect( 0, 0, c1.width, c1.height )
+  let num_triangles = triangles_to_render.length;
+
+  for( let i = 0; i < num_triangles; i ++ ){
+    let triangle = triangles_to_render[i];
+    // draw_filled_triangle(
+    //   gd,
+    //   triangle.points[0].x, triangle.points[0].y, // A
+    //   triangle.points[1].x, triangle.points[1].y, // B
+    //   triangle.points[2].x, triangle.points[2].y, // C
+    //   triangle.color
+    // );
+
+    draw_textured_triangle(
+      gd,
+      triangle.points[0].x, triangle.points[0].y, triangle.points[0].z, triangle.points[0].w, triangle.texcoords[0].u, triangle.texcoords[0].v, // vertex A
+      triangle.points[1].x, triangle.points[1].y, triangle.points[1].z, triangle.points[1].w, triangle.texcoords[1].u, triangle.texcoords[1].v, // vertex B
+      triangle.points[2].x, triangle.points[2].y, triangle.points[2].z, triangle.points[2].w, triangle.texcoords[2].u, triangle.texcoords[2].v, // vertex C
+      mesh_texture
+    );
+
+    if( WireFrame ){
+      draw_triangle(
+        gd,
+        triangle.points[0].x, triangle.points[0].y, // A
+        triangle.points[1].x, triangle.points[1].y, // B
+        triangle.points[2].x, triangle.points[2].y, // C
+        "#FFFFFF"
+      );
+    }
+
+  } // for i mesh_face
+
+  // 在这里清除深度缓冲区
+  clear_z_buffer();
+};
+
+// 程序入口
+(async()=>{
+
+  let {width, height, data} = await load_png_texture_data('drone.png');
+  texture_width = width;
+  texture_height = height;
+  mesh_texture = data;
+
+  await load_obj_file_data('drone.obj', mesh);
+
+  // 键盘事件
+  document.onkeydown = ev=>{
+
+    // WireFrame
+    // 87 w 83 s
+    if( ev.keyCode == 87 ){
+      WireFrame = true;
+    }
+
+    if( ev.keyCode == 83 ){
+      WireFrame = false;
+    }
+
+    // 上
+    if( ev.keyCode == 38 ){
+      camera.position.y += 0.5;
+    }
+    // 下
+    if( ev.keyCode == 40 ){
+      camera.position.y -= 0.5;
+    }
+
+    // 左
+    if( ev.keyCode == 37 ){
+      camera.yaw -= 0.1;
+    }
+
+    // 右
+    if( ev.keyCode == 39 ){
+      camera.yaw += 0.1;
+    }
+
+    // 8 56
+    if( ev.keyCode == 56 ){
+      // 前进
+      camera.forward_velocity = vec3_mul( camera.direction, 0.6 );
+      camera.position = vec3_add(camera.position, camera.forward_velocity);
+    }
+
+    // 5 53
+    if( ev.keyCode == 53 ){
+      // 后退
+      camera.forward_velocity = vec3_mul( camera.direction, 0.6 );
+      camera.position = vec3_sub(camera.position, camera.forward_velocity);
+    }
+
+  };
+
+  // return;
+  draw();
+  setInterval(()=>{
+    update();
+    draw();
+  }, 16);
+})();
+
+
+</script>
+</body>
+</html>
