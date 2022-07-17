@@ -660,17 +660,7 @@ let fov = Math.PI / 3;
 let aspect = c1.height / c1.width;
 let znear = 0.1;
 let zfar = 100.0;
-let proj_matrix = mat4_make_perspective( fov, aspect, znear, zfar );
-
-const CULL_NONE = 0, CULL_BACKFACE = 1;
-let cull_method = CULL_BACKFACE;
-let WireFrame = false; // 是否需要线框展示
-
-// 要执行渲染的三角形数组
-let triangles_to_render = [];
-
-// 深度缓冲区
-let zbuffer=Array(c1.width * c1.height).fill(1.0);
+let proj_matrix = mat4_make_perspective( fov, aspect, znear, zfar ); // 生成 透视投影矩阵
 
 // 平截头体
 let frustum_planes=[];
@@ -681,6 +671,18 @@ const LEFT_FRUSTUM_PLANE = 0,
     BOTTOM_FRUSTUM_PLANE = 3,
     NEAR_FRUSTUM_PLANE = 4,
     FAR_FRUSTUM_PLANE = 5;
+
+init_frustum_planes(fov, znear, zfar); // 初始化平截头体
+
+const CULL_NONE = 0, CULL_BACKFACE = 1;
+let cull_method = CULL_BACKFACE;
+let WireFrame = true; // 是否需要线框展示
+
+// 要执行渲染的三角形数组
+let triangles_to_render = [];
+
+// 深度缓冲区
+let zbuffer=Array(c1.width * c1.height).fill(1.0);
 
 function init_frustum_planes( fov, z_near, z_far ){
     const cos_half_fov = Math.cos( fov / 2 ), sin_half_fov = Math.sin( fov / 2 );
@@ -753,11 +755,32 @@ function init_frustum_planes( fov, z_near, z_far ){
 
 }
 
-function create_polygon_from_triangle( v0, v1, v2 ){
+function polygon_from_triangle( v0, v1, v2 ){
   return {
     vertices: [ v0, v1, v2 ],
     num_vertices: 3,
   };
+}
+
+// 从多边形提取三角形信息
+function triangles_from_polygon( polygon, triangles ){
+
+  // 一个多边形中三角形的数量为多边形的顶点数 - 2
+  for( let i = 0; i < polygon.num_vertices - 2; i ++ ){
+    let index0 = 0;
+    let index1 = i + 1;
+    let index2 = i + 2;
+
+    triangles[i]={
+      points: [],
+      // 三角形
+    };
+
+    triangles[i].points[0] = vec4_from_vec3( polygon.vertices[index0] );
+    triangles[i].points[1] = vec4_from_vec3( polygon.vertices[index1] );
+    triangles[i].points[2] = vec4_from_vec3( polygon.vertices[index2] );
+
+  } // for i
 }
 
 function clip_polygon_against_plane( polygon, plane /* 代表第几个平面 */ ){
@@ -798,6 +821,7 @@ function clip_polygon_against_plane( polygon, plane /* 代表第几个平面 */ 
     current_index ++;
 
   } // end while current_index
+  // console.log(123);
 
   for( let i = 0; i < num_inside_vertices; i ++ ){
     polygon.vertices[i] = vec3_clone( inside_vertices[i] );
@@ -859,6 +883,10 @@ const update = ()=>{
     let mesh_face = mesh.faces[i];
     let face_vertices = [];
 
+    if( i != 4 ){
+      continue;
+    }
+
     //
     mesh_face.color = '#FFFFFF'
 
@@ -908,65 +936,84 @@ const update = ()=>{
       }
     }
 
-    let projected_points = [];
-    for( let j = 0; j < 3; j ++ ){
-      // projected_points[j] = project( vec3_from_vec4( transformed_vertices[j] ) );
-      // 这里用透视投影矩阵来作投影运算
-      projected_points[j] = mat4_mul_vec4_project(proj_matrix, transformed_vertices[j] );
+    // 从原始三角形信息中复原 多边形
+    let polygon = polygon_from_triangle(
+      vec3_from_vec4( transformed_vertices[0] ),
+      vec3_from_vec4( transformed_vertices[1] ),
+      vec3_from_vec4( transformed_vertices[2] )
+    );
 
-      // 3D模型坐标Y是从下到上, 而屏幕坐标的Y是从上到下,所以要反转
-      projected_points[j].y *= -1;
+    // 正式裁减多边形
+    clip_polygon( polygon );
 
-      // 缩放再平移
-      projected_points[j].x *= c1.width / 2
-      projected_points[j].y *= c1.height / 2
+    let triangles_after_clipping = [], num_triangles_after_clipping = 0;
+    triangles_from_polygon( polygon, triangles_after_clipping );
 
-      projected_points[j].x += c1.width / 2
-      projected_points[j].y += c1.height / 2
+    // 遍历裁剪后的三角形
+    for( let t = 0; t < triangles_after_clipping.length; t ++ ){
+        let triangle_after_clipping = triangles_after_clipping[t];
 
-      // *** 取整 ***
-      projected_points[j].x = projected_points[j].x | 0
-      projected_points[j].y = projected_points[j].y | 0
-    } // for j
+        let projected_points = [];
+        for( let j = 0; j < 3; j ++ ){
+          // projected_points[j] = project( vec3_from_vec4( transformed_vertices[j] ) );
+          // 这里用透视投影矩阵来作投影运算
+          projected_points[j] = mat4_mul_vec4_project(proj_matrix, triangle_after_clipping.points[j] );
 
-    // 面的深度
-    let avg_depth = (transformed_vertices[0].z + transformed_vertices[1].z+transformed_vertices[2].z) / 3.0;
-    // 光照强度
-    let light_intensity_factor = vec3_dot( normal, {x: 0, y: 0, z: -1} );
-    // 面的光照颜色
-    let triangle_color = light_apply_intensity(0xFFFFFF, light_intensity_factor);
+          // 3D模型坐标Y是从下到上, 而屏幕坐标的Y是从上到下,所以要反转
+          projected_points[j].y *= -1;
 
-    let projected_triangle = {
-      points: [
-        { ...projected_points[0] },
-        { ...projected_points[1] },
-        { ...projected_points[2] },
-      ],
-      texcoords:[
-        {...mesh_face.a_uv},
-        {...mesh_face.b_uv},
-        {...mesh_face.c_uv}
-      ],
-      // color: mesh_face.color,
-      color: '#'+triangle_color.toString(16),
-      avg_depth,
-    };
+          // 缩放再平移
+          projected_points[j].x *= c1.width / 2
+          projected_points[j].y *= c1.height / 2
 
-    triangles_to_render.push(projected_triangle)
+          projected_points[j].x += c1.width / 2
+          projected_points[j].y += c1.height / 2
+
+          // *** 取整 ***
+          projected_points[j].x = projected_points[j].x | 0
+          projected_points[j].y = projected_points[j].y | 0
+        } // for j
+
+        // 面的深度
+        let avg_depth = (transformed_vertices[0].z + transformed_vertices[1].z+transformed_vertices[2].z) / 3.0;
+        // 光照强度
+        let light_intensity_factor = vec3_dot( normal, {x: 0, y: 0, z: -1} );
+        // 面的光照颜色
+        let triangle_color = light_apply_intensity(0xFFFFFF, light_intensity_factor);
+
+        let projected_triangle = {
+          points: [
+            { ...projected_points[0] },
+            { ...projected_points[1] },
+            { ...projected_points[2] },
+          ],
+          texcoords:[
+            {...mesh_face.a_uv},
+            {...mesh_face.b_uv},
+            {...mesh_face.c_uv}
+          ],
+          // color: mesh_face.color,
+          color: '#'+triangle_color.toString(16),
+          avg_depth,
+        };
+
+        triangles_to_render.push(projected_triangle)
+    } // for t 裁减后的三角形数组
+
   } // for i mesh_face
 
   // 绘画者算法, 对三角面按深度排序
-  let num_triangles = triangles_to_render.length;
+  // let num_triangles = triangles_to_render.length;
 
-  for( let i = 0; i < num_triangles; i ++ ){
-    for( let j = i + 1; j < num_triangles; j ++ ){
-      if( triangles_to_render[i].avg_depth < triangles_to_render[j].avg_depth ){
-        let tmp = triangles_to_render[i]
-        triangles_to_render[i] = triangles_to_render[j]
-        triangles_to_render[j] = tmp
-      }
-    } // for j over
-  } // for i over
+  // for( let i = 0; i < num_triangles; i ++ ){
+  //   for( let j = i + 1; j < num_triangles; j ++ ){
+  //     if( triangles_to_render[i].avg_depth < triangles_to_render[j].avg_depth ){
+  //       let tmp = triangles_to_render[i]
+  //       triangles_to_render[i] = triangles_to_render[j]
+  //       triangles_to_render[j] = tmp
+  //     }
+  //   } // for j over
+  // } // for i over
 
 };
 
@@ -985,13 +1032,13 @@ const draw = ()=>{
     //   triangle.color
     // );
 
-    draw_textured_triangle(
-      gd,
-      triangle.points[0].x, triangle.points[0].y, triangle.points[0].z, triangle.points[0].w, triangle.texcoords[0].u, triangle.texcoords[0].v, // vertex A
-      triangle.points[1].x, triangle.points[1].y, triangle.points[1].z, triangle.points[1].w, triangle.texcoords[1].u, triangle.texcoords[1].v, // vertex B
-      triangle.points[2].x, triangle.points[2].y, triangle.points[2].z, triangle.points[2].w, triangle.texcoords[2].u, triangle.texcoords[2].v, // vertex C
-      mesh_texture
-    );
+    // draw_textured_triangle(
+    //   gd,
+    //   triangle.points[0].x, triangle.points[0].y, triangle.points[0].z, triangle.points[0].w, triangle.texcoords[0].u, triangle.texcoords[0].v, // vertex A
+    //   triangle.points[1].x, triangle.points[1].y, triangle.points[1].z, triangle.points[1].w, triangle.texcoords[1].u, triangle.texcoords[1].v, // vertex B
+    //   triangle.points[2].x, triangle.points[2].y, triangle.points[2].z, triangle.points[2].w, triangle.texcoords[2].u, triangle.texcoords[2].v, // vertex C
+    //   mesh_texture
+    // );
 
     if( WireFrame ){
       draw_triangle(
@@ -1012,12 +1059,12 @@ const draw = ()=>{
 // 程序入口
 (async()=>{
 
-  let {width, height, data} = await load_png_texture_data('f22.png');
+  let {width, height, data} = await load_png_texture_data('cube.png');
   texture_width = width;
   texture_height = height;
   mesh_texture = data;
 
-  await load_obj_file_data('f22.obj', mesh);
+  await load_obj_file_data('cube.obj', mesh);
 
   // 键盘事件
   document.onkeydown = ev=>{
