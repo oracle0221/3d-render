@@ -659,11 +659,14 @@ let camera = {
 
 let fov_factor = 640;
 
-let fov = Math.PI / 3;
 let aspect = c1.height / c1.width;
+let aspect_y = c1.height / c1.width;
+let aspect_x = c1.width / c1.height;
+let fov_y = Math.PI / 3;
+let fov_x = Math.atan(Math.tan(fov_y / 2) * aspect_x) * 2;
 let znear = 0.1;
 let zfar = 100.0;
-let proj_matrix = mat4_make_perspective( fov, aspect, znear, zfar ); // 生成 透视投影矩阵
+let proj_matrix = mat4_make_perspective( fov_y, aspect, znear, zfar ); // 生成 透视投影矩阵
 
 // 平截头体
 let frustum_planes=[];
@@ -675,7 +678,7 @@ const LEFT_FRUSTUM_PLANE = 0,
     NEAR_FRUSTUM_PLANE = 4,
     FAR_FRUSTUM_PLANE = 5;
 
-init_frustum_planes(fov, znear, zfar); // 初始化平截头体
+init_frustum_planes(fov_x,fov_y, znear, zfar); // 初始化平截头体
 
 const CULL_NONE = 0, CULL_BACKFACE = 1;
 let cull_method = CULL_BACKFACE;
@@ -687,17 +690,18 @@ let triangles_to_render = [];
 // 深度缓冲区
 let zbuffer=Array(c1.width * c1.height).fill(1.0);
 
-function init_frustum_planes( fov, z_near, z_far ){
-    const cos_half_fov = Math.cos( fov / 2 ), sin_half_fov = Math.sin( fov / 2 );
+function init_frustum_planes( fov_x,fov_y, z_near, z_far ){
+    const cos_half_fov_x = Math.cos( fov_x / 2 ), sin_half_fov_x = Math.sin( fov_x / 2 );
+    const cos_half_fov_y = Math.cos( fov_y / 2 ), sin_half_fov_y = Math.sin( fov_y / 2 );
 
     frustum_planes[LEFT_FRUSTUM_PLANE] = {
       point: {
         x: 0, y: 0, z: 0,
       },
       normal:{
-        x: cos_half_fov,
+        x: cos_half_fov_x,
         y: 0,
-        z: sin_half_fov,
+        z: sin_half_fov_x,
       },
     };
 
@@ -706,9 +710,9 @@ function init_frustum_planes( fov, z_near, z_far ){
         x: 0, y: 0, z: 0,
       },
       normal:{
-        x: -cos_half_fov,
+        x: -cos_half_fov_x,
         y: 0,
-        z: sin_half_fov,
+        z: sin_half_fov_x,
       },
     };
 
@@ -718,8 +722,8 @@ function init_frustum_planes( fov, z_near, z_far ){
       },
       normal:{
         x: 0,
-        y: -cos_half_fov,
-        z: sin_half_fov,
+        y: -cos_half_fov_y,
+        z: sin_half_fov_y,
       },
     };
 
@@ -729,8 +733,8 @@ function init_frustum_planes( fov, z_near, z_far ){
       },
       normal:{
         x: 0,
-        y: cos_half_fov,
-        z: sin_half_fov,
+        y: cos_half_fov_y,
+        z: sin_half_fov_y,
       },
     };
 
